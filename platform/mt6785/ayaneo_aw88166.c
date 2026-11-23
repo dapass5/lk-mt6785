@@ -219,6 +219,7 @@ static int aw_power_on(struct aw_amp *a)
 		if (!(a->sysst & ST_DSPS)) break;
 		mdelay(2);
 	}
+	if (a->sysst & ST_DSPS) return -1;
 	a->step = 11;
 	aw_rd(a, AW_SYSINT_REG, &v);   /* clear the interrupt status */
 	AW_T(a, 5);
@@ -252,7 +253,9 @@ static int aw_bringup(struct aw_amp *a)
 		unsigned char reg = (unsigned char)a->regs[i][0];
 		unsigned short val = a->regs[i][1];
 		if (reg == AW_SYSINTM_REG) val = 0xffff;
-		if (reg == AW_SYSCTRL_REG) val |= SC_HMUTE;
+		/* Keep the output stage off during the profile and DSP upload.
+		 * aw_power_on releases it after the I2S clock has locked. */
+		if (reg == AW_SYSCTRL_REG) val |= SC_HMUTE | SC_AMPPD;
 		if (aw_wr(a, reg, val) < 0) return -1;
 	}
 	AW_T(a, 2);
