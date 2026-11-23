@@ -57,6 +57,17 @@ extern void ayaneo_set_overdrive_curve(int kuphi, int kuplo, int gam);		/* mt_di
  * 0 magic, 4 version, 8 volume, 12 brightness, 16 load-state-on-boot,
  * 20 skip-boot-anim/chime, 24 lcd-filter, 28 color-correction, 32 dark-filter. */
 static volatile int s_gbc_vol = AYANEO_AUDIO_VOLUME;	/* audio level, 0-100 */
+
+static unsigned int audio_gain_q8(unsigned int volume)
+{
+	if (volume > 100u) volume = 100u;
+#ifdef KONKR_KPA
+	/* Half-scale ceiling with smaller amplitude increments near silence. */
+	return (128u * volume * (100u + 3u * volume) + 20000u) / 40000u;
+#else
+	return volume * 256u / 100u;
+#endif
+}
 static volatile int s_brightness = AYANEO_BL_DEFAULT;	/* LCD level, 0-255 */
 static volatile int s_load_on_boot = 1;		/* resume save state after boot */
 static volatile int s_skip_boot = 0;		/* skip the animation + chime */

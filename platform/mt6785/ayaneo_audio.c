@@ -482,8 +482,7 @@ static void mt6359_hp_mute_ramp(void)
 }
 
 /*
- * Scale the decoded PCM by the configured volume (0-100%). Linear, in place,
- * on the 16-bit stereo buffer. vol>=100 is a no-op (leaves it full-scale).
+ * Apply the same gain as live playback to the decoded stereo clip.
  */
 static void apply_volume(unsigned int pcm_bytes, unsigned int vol)
 {
@@ -491,9 +490,9 @@ static void apply_volume(unsigned int pcm_bytes, unsigned int vol)
 	unsigned int n = pcm_bytes / 2;		/* samples (both channels) */
 	unsigned int i, q;
 
-	if (vol >= 100)
+	q = audio_gain_q8(vol);
+	if (q == 256u)
 		return;
-	q = vol * 256u / 100u;			/* 8.8 fixed-point gain */
 	for (i = 0; i < n; i++)
 		s[i] = (short)((s[i] * (int)q) >> 8);
 }

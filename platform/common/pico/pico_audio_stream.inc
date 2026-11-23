@@ -73,8 +73,7 @@ void ayaneo_gbc_audio_init(void)
  * and write them into the ring. Volume from AYANEO_AUDIO_VOLUME. */
 void ayaneo_gbc_audio_submit(const unsigned int *samples, unsigned count)
 {
-	int vol = s_gbc_vol;
-	unsigned q = (vol >= 100) ? 256u : ((unsigned)vol * 256u / 100u);
+	unsigned q = audio_gain_q8(s_gbc_vol);
 	unsigned i;
 
 	unsigned thr;
@@ -193,8 +192,7 @@ volatile int g_dbg_alead_min, g_dbg_asnap_n, g_dbg_asnap_lead; volatile unsigned
 void ayaneo_gba_audio_submit(const short *interleaved, unsigned frames)
 {
 	extern volatile unsigned int g_dbg_asub_calls, g_dbg_asub_done, g_dbg_asub_frames;
-	int vol = s_gbc_vol;
-	unsigned q = (vol >= 100) ? 256u : ((unsigned)vol * 256u / 100u);
+	unsigned q = audio_gain_q8(s_gbc_vol);
 	unsigned i;
 
 	if (s_gba_rw_capture) {			/* rewind: divert into the capture buffer, do not ring */
@@ -331,8 +329,7 @@ int ayaneo_menu_audio_room(void)
 
 void ayaneo_menu_audio_submit(const short *stereo, unsigned frames)
 {
-	int vol = s_gbc_vol;
-	unsigned q = (vol >= 100) ? 256u : ((unsigned)vol * 256u / 100u);
+	unsigned q = audio_gain_q8(s_gbc_vol);
 	unsigned i;
 	if (!s_gbc_audio_on || s_gbc_paused)
 		return;
@@ -382,8 +379,7 @@ void ayaneo_audio_reverse_flip(void)
 
 void ayaneo_snes_audio_submit(const short *interleaved, unsigned frames, unsigned src_hz)
 {
-	int vol = s_gbc_vol;
-	unsigned q = (vol >= 100) ? 256u : ((unsigned)vol * 256u / 100u);
+	unsigned q = audio_gain_q8(s_gbc_vol);
 	unsigned step, i;
 
 	if (!s_gbc_audio_on || s_gbc_paused || !frames)
