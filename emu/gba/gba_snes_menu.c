@@ -91,8 +91,20 @@ void gba_menu_arm_reverse(const unsigned short *game_frame)
 		arch_clean_cache_range(GBA_GAME_FREEZE_PA, 240u * 160u * 2u);
 		g_reverse_punch = 1;
 		g_reverse_is_gbc = 0;
+#ifdef KONKR_KPA
+		{
+			extern void ayaneo_gba_present_close_frame(const unsigned short *pix);
+			ayaneo_gba_present_close_frame((const unsigned short *)(uintptr_t)GBA_GAME_FREEZE_PA);
+		}
+#endif
 		reverse_show_now();
 	}
+#ifdef KONKR_KPA
+	else {
+		extern void ayaneo_menu_overlay(void (*paint)(unsigned int *, unsigned int, unsigned int, unsigned int), int open);
+		ayaneo_menu_overlay(0, 0);
+	}
+#endif
 }
 
 /* GB/GBC variant: the frozen frame is 160x144 (the reverse renders it at 6x). */

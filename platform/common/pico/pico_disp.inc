@@ -1984,6 +1984,22 @@ static void live_drop(void)
 	if (LIVE_A_GAME) g_overlay_active = 0;
 }
 
+#ifdef KONKR_KPA
+void ayaneo_gba_present_close_frame(const unsigned short *pix)
+{
+	disp_input_config off;
+	memset(&off, 0, sizeof(off));
+	off.layer = 2;
+	primary_display_config_pending(&off);
+	/* Keep the static overlay's buffer reserved while the game renders. Its
+	 * normal present commits both the new background and the hidden layer. */
+	ayaneo_gbc_show_frame(pix);
+	memset(&s_live, 0, sizeof(s_live));
+	g_live_up = 0;
+	g_overlay_active = 0;
+}
+#endif
+
 /* Undo the RSZ path: disable the resizer and restore the OVL0_2L ROI to full panel, so the
  * menu / other cores render correctly after an RSZ SNES session. Called at SNES session exit
  * and by oem snes-rsz:0. Also clears the config-once latch so the next session reconfigures. */
@@ -3433,12 +3449,61 @@ static void rot_prerender_canvas(const unsigned short *pix, unsigned sw, unsigne
 }
 #endif
 
+#if defined(KONKR_KPA)
+/* The KPA's three GBA aspect modes all fill its 960x640 logical screen at 4x.
+ * Render eight physical source pixels at a time so the live row kernels can be
+ * used without borrowing the resizer scratch (which aliases transition data). */
+static void kpa_gba_punch_4x(unsigned int *dst, const unsigned short *pix,
+			     int filt, const unsigned short *lut)
+{
+	extern void ayaneo_filter_prescale_row_neon(const unsigned short *, unsigned,
+		unsigned int *, unsigned, unsigned, unsigned, int, int);
+	unsigned short src[8];
+	unsigned int tile[4 * 32];
+	unsigned x, y, i, dx, dy;
+	int ccw = g_rot_ccw;
+	for (y = 0; y < GBC_SRC_H; y += 8) {
+		for (x = 0; x < GBC_SRC_W; x++) {
+			for (i = 0; i < 8; i++) {
+				unsigned v = pix[(y + (ccw ? i : 7u - i)) * GBC_SRC_W + x];
+				src[i] = lut ? lut[((v >> 4) & 0xf00u) |
+					((v >> 3) & 0xf0u) | ((v >> 1) & 0xfu)] : v;
+			}
+			if (filt >= 4)
+				lcd_filter_prescale(tile, 32, src, 8, 1, 8, 4, 4, filt, 0, 1);
+			else
+				ayaneo_filter_prescale_row_neon(src, 8, tile, 32, 4, 4,
+					filt >= 1, filt >= 2);
+			for (dy = 0; dy < 32; dy++) {
+				unsigned int *out = dst + (4u * y + dy) * ROT_CANVAS_W + 4u * x;
+				for (dx = 0; dx < 4; dx++)
+					out[dx] = tile[(ccw ? 3u - dx : dx) * 32u + (ccw ? dy : 31u - dy)];
+			}
+		}
+	}
+}
+#endif
+
 void ayaneo_gba_punch_prerender(const unsigned short *pix)
 {
 	unsigned int W = CFG_DISPLAY_WIDTH, H = CFG_DISPLAY_HEIGHT;
 	unsigned int pitch = ALIGN_TO(W, MTK_FB_ALIGNMENT);
 	extern volatile int g_gba_aspect;
 	if (!pix) return;
+#if defined(KONKR_KPA)
+	if (ROT_CANVAS_W == 4u * GBC_SRC_W && ROT_CANVAS_H == 4u * GBC_SRC_H) {
+		extern int ayaneo_get_color_correct(void);
+		extern const unsigned short gba_cc_lut444[];
+		const unsigned short *lut = ayaneo_get_color_correct() ? gba_cc_lut444 : 0;
+		int filt = ayaneo_get_lcd_filter_core(1);
+		if (g_dbg_filt_ovr >= 0 && g_dbg_filt_ovr <= 5) filt = g_dbg_filt_ovr;
+		if (filt || lut) {
+			kpa_gba_punch_4x((unsigned int *)(uintptr_t)GBA_PUNCH_GAME_FULL_PA, pix, filt, lut);
+			arch_clean_cache_range(GBA_PUNCH_GAME_FULL_PA, ROT_CANVAS_W * ROT_CANVAS_H * 4u);
+			return;
+		}
+	}
+#endif
 #if AYANEO_ROT
 	/* The punch buffer is composited onto the virtual canvas, so bake the game there with the
 	 * rect the live resizer path will show, mapped from the logical screen to canvas scale. */

@@ -4006,6 +4006,10 @@ static int emu_thread(void *arg)
 				/* Tear down the hardware menu overlay (OVL0 L0) before the reverse punch +
 				 * carousel: an AYA-hold or "Close" exit can leave it enabled, which would
 				 * composite the stale Pico panel over the transition and the carousel. */
+#if defined(KONKR_KPA) && defined(AYANEO_GBA_SD)
+				/* The SD exit drops this layer with the first frozen GBA frame. */
+				if (!(s_sd_mode && s_nrom > 0))
+#endif
 				{
 					extern void ayaneo_menu_overlay(void (*paint)(unsigned int *, unsigned int, unsigned int, unsigned int), int open);
 					ayaneo_menu_overlay(0, 0);
