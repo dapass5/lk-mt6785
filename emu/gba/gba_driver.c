@@ -1473,8 +1473,8 @@ static int led_thread(void *arg)
 	extern unsigned int pmic_upmu_get_rgs_chrdet(void);   /* the live CHRDET bit (upmu_is_chr_det prints to the UART) */
 	int pct = -1, chr = 0, tick = 0, flash = 0, last = -1, state;
 	(void)arg;
-	/* ayaneo_gba_sd_boot lit the boot cue already. Keep the first full battery/
-	 * charger pass here delayed until the speaker amps' shared-i2c6 bring-up is done. */
+	/* The cold-boot cue already lit the LED. Keep the first full battery/charger
+	 * pass here delayed until the speaker amps' shared-i2c6 bring-up is done. */
 	thread_sleep(2500);
 #ifdef KONKR_KPA
 	{ extern int ayaneo_mt6360_chrind_off(void); ayaneo_mt6360_chrind_off(); }
@@ -4553,6 +4553,28 @@ void ayaneo_boot_to_os(void)
  * Then the settings, the BIOS (optional: /bios/gba_bios.bin or /gba_bios.bin; without it the
  * intro is armGBA's own splash) and the cart header file are read, and the emulator thread starts.
  */
+/*
+ * Cold power-on cue. This runs from platform_init() as soon as the DTB has
+ * configured GPIO/i2c6, before audio and panel bring-up. It deliberately uses
+ * the normal on-battery green and ignores charger state: the first light is the
+ * signal that PMIC power hold has been confirmed and POWER can be released.
+ */
+static int s_boot_cue_lit;
+void ayaneo_boot_cue_start(void)
+{
+	if (s_boot_cue_lit) return;
+	s_boot_cue_lit = 1;
+	g_dbg_led_state = 1;
+	ayaneo_charge_led(0, LED_LEVEL, 0);
+}
+void ayaneo_boot_cue_cancel(void)
+{
+	if (!s_boot_cue_lit) return;
+	s_boot_cue_lit = 0;
+	g_dbg_led_state = 0;
+	ayaneo_charge_led(0, 0, 0);
+}
+
 static void boot_led_cue(void);
 int ayaneo_gba_sd_boot(void)
 {
@@ -4608,7 +4630,7 @@ int ayaneo_gba_sd_boot(void)
 		GBA_LOG("gba-sd: " MENU_PACK_PATH " missing - Android\n");
 		return -3;
 	}
-	boot_led_cue();   /* Pico is committed: cue the user before card setup and the BIOS intro */
+	boot_led_cue();   /* keep the cold-boot cue steady after Pico is committed */
 	s_have_bios = (gba_sd_load_bios(&s_sd_vol, s_sd_bios) == 0);
 	g_dbg_bt_bios = BT_MS();
 	if (!card_file_present(&s_sd_vol, CORE_PATH_ARMGBA) &&
@@ -4660,14 +4682,9 @@ int ayaneo_gba_sd_boot(void)
  * makes this safe while the speaker amps are still being brought up. */
 static void boot_led_cue(void)
 {
-	extern unsigned int pmic_upmu_get_rgs_chrdet(void);
-	if (pmic_upmu_get_rgs_chrdet()) {
-		g_dbg_led_state = 3;   /* charging, before the battery percentage is known */
-		ayaneo_charge_led(LED_CHG_R, LED_CHG_G, 0);
-	} else {
-		g_dbg_led_state = 1;   /* on battery */
-		ayaneo_charge_led(0, LED_LEVEL, 0);
-	}
+	s_boot_cue_lit = 1;
+	g_dbg_led_state = 1;   /* the one cold-boot prompt colour: on battery green */
+	ayaneo_charge_led(0, LED_LEVEL, 0);
 }
 #endif
 

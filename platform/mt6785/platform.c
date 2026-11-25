@@ -712,6 +712,7 @@ void ayaneo_emu_boot_started(void)
 /* the boot goes to Android after all: the stock steps now, and the early audio off */
 void ayaneo_emu_boot_abandoned(void)
 {
+	{ extern void ayaneo_boot_cue_cancel(void); ayaneo_boot_cue_cancel(); }
 	{ extern void ayaneo_show_deferred_logo(void); ayaneo_show_deferred_logo(); }   /* mt_logo.c */
 	if (s_audio_early) {
 		extern void ayaneo_gbc_audio_shutdown(void);
@@ -767,6 +768,22 @@ void platform_init(void)
 #if defined(USE_DTB_NO_DWS) && !defined(MACH_FPGA)
 	mt_gpio_set_default();
 #endif  // defined(USE_DTB_NO_DWS) && !defined(MACH_FPGA)
+
+#if defined(AYANEO_GBA_SD) && defined(KONKR_KPA)
+	/*
+	 * Cold power-on only: assert and verify the PMIC power hold, then light
+	 * the normal on-battery green before audio and panel bring-up. This is the
+	 * earliest point where the DTB has configured the i2c6 pins. The cue is a
+	 * release-POWER signal, not a charging indication; a path that abandons the
+	 * GammaOS boot turns it off in ayaneo_emu_boot_abandoned().
+	 */
+	if (g_boot_arg->boot_reason == BR_POWER_KEY && emu_boot_expected()) {
+		extern void ayaneo_boot_cue_start(void);
+		pmic_power_hold(1);
+		if (pmic_get_register_value(PMIC_RG_PWRHOLD) & 1u)
+			ayaneo_boot_cue_start();
+	}
+#endif
 
 #ifndef MACH_FPGA
 	PROFILING_START("led init");
